@@ -1,0 +1,6 @@
+.dockerignore
+.github
+.gitignore
+.goreleaser.yaml
+README.md
+LICENSE
