@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/go-redis/redis/v8"
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/mux"
@@ -126,6 +127,10 @@ func (broker *Broker) Start(port string) {
 		broker.connectionsLock.RUnlock()
 
 		broker.connectionsLock.Lock()
+		if c, ok := broker.ackKillChannels[s.ID()]; ok {
+			c <- true
+		}
+		delete(broker.ackKillChannels, s.ID())
 		delete(broker.connections, s.ID())
 		broker.connectionsLock.Unlock()
 	})
@@ -134,6 +139,18 @@ func (broker *Broker) Start(port string) {
 
 	router := mux.NewRouter()
 	router.Handle("/socket.io/", server)
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		broker.connectionsLock.RLock()
+		data := map[string]interface{}{
+			"activeConnections": len(broker.connections),
+		}
+		broker.connectionsLock.RUnlock()
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			log.Println(err)
+		}
+		w.Write(jsonBytes)
+	})
 
 	log.Printf("Message broker is running on port %s...\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, router))
