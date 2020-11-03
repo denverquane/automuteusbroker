@@ -20,6 +20,7 @@ type Broker struct {
 
 	//map of socket IDs to connection codes
 	connections     map[string]string
+	ackKillChannels map[string]chan bool
 	connectionsLock sync.RWMutex
 }
 
@@ -53,14 +54,18 @@ func (broker *Broker) Start(port string) {
 		if len(msg) != ConnectCodeLength {
 			s.Close()
 		} else {
+			killChannel := make(chan bool)
+
 			broker.connectionsLock.Lock()
 			broker.connections[s.ID()] = msg
+			broker.ackKillChannels[s.ID()] = killChannel
 			broker.connectionsLock.Unlock()
 
 			err := PushJob(ctx, broker.client, msg, Connection, "true")
 			if err != nil {
 				log.Println(err)
 			}
+			go broker.AckWorker(ctx, msg, killChannel)
 		}
 	})
 	server.OnEvent("/", "lobby", func(s socketio.Conn, msg string) {
@@ -132,4 +137,20 @@ func (broker *Broker) Start(port string) {
 
 	log.Printf("Message broker is running on port %s...\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, router))
+}
+
+//anytime a bot "acks", then push a notification
+func (broker *Broker) AckWorker(ctx context.Context, connCode string, killChan <-chan bool) {
+	pubsub := AckSubscribe(ctx, broker.client, connCode)
+
+	for {
+		select {
+		case <-killChan:
+			pubsub.Close()
+			return
+		case <-pubsub.Channel():
+			notify(ctx, broker.client, connCode)
+			break
+		}
+	}
 }

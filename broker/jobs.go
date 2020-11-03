@@ -58,3 +58,11 @@ func PopJob(ctx context.Context, redis *redis.Client, connCode string) (Job, err
 	err = json.Unmarshal([]byte(str), &j)
 	return j, err
 }
+
+func Ack(ctx context.Context, redis *redis.Client, connCode string) {
+	redis.Publish(ctx, JobNamespace+connCode+":ack", true)
+}
+
+func AckSubscribe(ctx context.Context, redis *redis.Client, connCode string) *redis.PubSub {
+	return redis.Subscribe(ctx, JobNamespace+connCode+":ack")
+}
