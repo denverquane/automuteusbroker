@@ -35,6 +35,7 @@ func NewBroker(redisAddr, redisUser, redisPass string) *Broker {
 	return &Broker{
 		client:          rdb,
 		connections:     map[string]string{},
+		ackKillChannels: map[string]chan bool{},
 		connectionsLock: sync.RWMutex{},
 	}
 }
