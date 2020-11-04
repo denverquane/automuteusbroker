@@ -167,6 +167,10 @@ func (broker *Broker) AckWorker(ctx context.Context, connCode string, killChan <
 			pubsub.Close()
 			return
 		case <-pubsub.Channel():
+			err := PushJob(ctx, broker.client, connCode, Connection, "true")
+			if err != nil {
+				log.Println(err)
+			}
 			notify(ctx, broker.client, connCode)
 			break
 		}
