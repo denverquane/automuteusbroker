@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"log"
+	"time"
 )
 
 type JobType int
@@ -20,6 +22,8 @@ type Job struct {
 	Payload interface{} `json:"payload"`
 }
 
+const JobTTLSeconds = 3600
+
 const JobNamespace = "automuteus:jobs:"
 
 func PushJob(ctx context.Context, redis *redis.Client, connCode string, jobType JobType, payload string) error {
@@ -32,9 +36,15 @@ func PushJob(ctx context.Context, redis *redis.Client, connCode string, jobType 
 		return err
 	}
 
-	_, err = redis.RPush(ctx, JobNamespace+connCode, string(jBytes)).Result()
+	count, err := redis.RPush(ctx, JobNamespace+connCode, string(jBytes)).Result()
 	if err == nil {
 		notify(ctx, redis, connCode)
+	}
+
+	//new list
+	if count < 2 {
+		log.Printf("Set TTL for List")
+		redis.Expire(ctx, JobNamespace+connCode, JobTTLSeconds*time.Second)
 	}
 
 	return err
